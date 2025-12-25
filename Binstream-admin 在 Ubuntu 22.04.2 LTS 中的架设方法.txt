@@ -1,0 +1,333 @@
+1. 将Ubuntu 22.04.2 LTS安装好
+
+2. 更新 Ubuntu 22.04.2 
+
+	sudo apt-get  update
+
+	sudo apt-get  upgrade
+
+	sudo apt-get  upgrade dist
+
+	sudo apt-get autoremove -y
+
+	sudo apt-get autoclean
+
+	sudo do-release-upgrade
+
+
+3. BinStream Admin 目前支援： node-v19.8.1-linux-x64.tar.xz(Node为最新版), redis-server/jammy,now 5:6.0.16, mongodb-org-server/now 3.4.24(必须先装3.2.22, 再升级到3.4.24)
+
+
+4.  将 BinSteam Admin copy 在  /data/Binsteam/admin中
+
+5.  下载 https://nodejs.org/dist/v19.8.1/node-v19.8.1-linux-x64.tar.xz 并将  node-v19.8.1-linux-x64.tar.xz 解压到/data/node-v19.8.1-linux-x64
+
+	cd /data
+	wget https://nodejs.org/dist/v19.8.1/node-v19.8.1-linux-x64.tar.xz
+      tar -xf node-v19.8.1-linux-x64.tar.xz
+6. 设置 corepack, node, npm,  npx 的 symbolic 连接
+     
+     ln -s      /data/node-v19.8.1-linux-x64/bin/node  /usr/bin/node
+     ln -s      /data/node-v19.8.1-linux-x64/bin/corepack /usr/bin/corepack
+     ln -s      /data/node-v19.8.1-linux-x64/bin/npm  /usr/bin/npm
+     ln -s      /data/node-v19.8.1-linux-x64/bin/npx  /usr/bin/npx
+
+	
+7。 下载和安装libssl1.0.0, mongodb-org-server/now 3.2.22 以及 mongodb-org-server/now 3.4.24 需要libssl1.0.0 才能运行     
+
+	wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5.11_amd64.deb
+      dpkg -i libssl1.0.0_1.0.2n-1ubuntu5.11_amd64.deb
+
+8. 安装 redis-server
+	apt install redis-server
+9. 下载和安装mongodb-org-server/now 3.2.22
+
+	 wget https://repo.mongodb.org/apt/ubuntu/dists/xenial/mongodb-org/3.2/multiverse/binary-amd64/mongodb-org_3.2.22_amd64.deb
+       wget https://repo.mongodb.org/apt/ubuntu/dists/xenial/mongodb-org/3.2/multiverse/binary-amd64/mongodb-org-tools_3.2.22_amd64.deb
+       wget https://repo.mongodb.org/apt/ubuntu/dists/xenial/mongodb-org/3.2/multiverse/binary-amd64/mongodb-org-shell_3.2.22_amd64.deb
+       wget https://repo.mongodb.org/apt/ubuntu/dists/xenial/mongodb-org/3.2/multiverse/binary-amd64/mongodb-org-server_3.2.22_amd64.deb
+       wget https://repo.mongodb.org/apt/ubuntu/dists/xenial/mongodb-org/3.2/multiverse/binary-amd64/mongodb-org-mongos_3.2.22_amd64.deb
+
+	 dpkg -i mongodb-org_3.2.22_amd64.deb  mongodb-org-mongos_3.2.22_amd64.deb  mongodb-org-server_3.2.22_amd64.deb  mongodb-org-shell_3.2.22_amd64.deb  mongodb-org-tools_3.2.22_amd64.deb
+
+10. 设置mongodb 自动启动
+
+              vi /lib/systemd/system/mongod.service 将下列内容贴入
+[Unit]
+Description=MongoDB Database Server
+Documentation=https://docs.mongodb.org/manual
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mongodb
+Group=mongodb
+EnvironmentFile=-/etc/default/mongod
+ExecStart=/usr/bin/mongod --config /etc/mongod.conf
+RuntimeDirectory=mongodb
+# file size
+LimitFSIZE=infinity
+# cpu time
+LimitCPU=infinity
+# virtual memory size
+LimitAS=infinity
+# open files
+LimitNOFILE=64000
+# processes/threads
+LimitNPROC=64000
+# locked memory
+LimitMEMLOCK=infinity
+# total threads (user+kernel)
+TasksMax=infinity
+TasksAccounting=false
+
+# Recommended limits for mongod as specified in
+# https://docs.mongodb.com/manual/reference/ulimit/#recommended-ulimit-settings
+
+[Install]
+WantedBy=multi-user.target
+
+
+存档后，systemctl enable mongod.service; systemctl start  mongod.service; systemctl status mongod.service
+
+如果mongodb安装好，而且运行了，你会看到底下的结果。
+
+ systemctl status mongod.service
+● mongod.service - MongoDB Database Server
+     Loaded: loaded (/lib/systemd/system/mongod.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2023-03-20 03:33:33 UTC; 2h 58min ago
+       Docs: https://docs.mongodb.org/manual
+   Main PID: 14868 (mongod)
+     Memory: 377.9M
+        CPU: 18.716s
+     CGroup: /system.slice/mongod.service
+             └─14868 /usr/bin/mongod --config /etc/mongod.conf
+
+Mar 20 03:33:33 bs-admin systemd[1]: Started MongoDB Database Server.
+
+11. 恢复之前备份的sopcloud 资料库的资料, 下面的例子sopcloud 是存在 dump2/sopcloud 的目录中
+
+	mongorestore --db sopcloud --drop dump2/sopcloud
+
+
+12. 设置bs-admin 自动启动
+	vi  /lib/systemd/system/bs-admin.service	将下列内容贴入
+
+[Unit]
+Description=bs-admin service
+After=network.target
+AssertPathExists=/data/BinStream/admin
+
+[Service]
+WorkingDirectory=/data/BinStream/admin
+ExecStart=/usr/bin/node /data/BinStream/admin/bin/admin.js
+Restart=always
+PrivateTmp=true
+NoNewPrivileges=true
+StandardOutput=append:/data/BinStream/admin/logs/bs-admin.log
+StandardError=append:/data/BinStream/admin/logs/bs-admin-error.log
+
+[Install]
+Alias=bs-admin
+WantedBy=multi-user.target
+
+
+存档后，systemctl enable bs-admin.service; systemctl start  bs-admin.service; systemctl status bs-admin.service
+
+如果bs-admin.service安装好，而且运行了，你会看到底下的结果。
+
+systemctl status bs-admin.service
+● bs-admin.service - bs-admin service
+     Loaded: loaded (/lib/systemd/system/bs-admin.service; disabled; vendor preset: enabled)
+     Active: active (running) since Mon 2023-03-20 05:59:35 UTC; 48min ago
+   Main PID: 23112 (node)
+      Tasks: 33 (limit: 4530)
+     Memory: 131.4M
+        CPU: 16.173s
+     CGroup: /system.slice/bs-admin.service
+             ├─23112 /usr/bin/node /data/BinStream/admin/bin/admin.js
+             ├─23128 /data/node-v19.8.1-linux-x64/bin/node /data/BinStream/admin/bin/admin.js
+             └─23129 /data/node-v19.8.1-linux-x64/bin/node /data/BinStream/admin/bin/admin.js
+
+Mar 20 05:59:35 bs-admin systemd[1]: Started bs-admin service.
+
+您可以在/data/BinStream/admin/logs/ 目录中看到 bs-admin.log
+
+root@bs-admin:/data/BinStream/admin/logs# ls
+access.log    access.log.2  access.log.4        bs-admin.log  ctrl.log.1  ctrl.log.3  msg.log    msg.log.2  msg.log.4
+access.log.1  access.log.3  bs-admin-error.log  ctrl.log      ctrl.log.2  ctrl.log.4  msg.log.1  msg.log.3
+
+
+13. 至此，bs-admin 运行在  mongodb-org-server_3.2.22 的版本装好了，如果你要升级mongodb 到mongodb-org-server/now 3.4.24 请继续以下的步骤。
+
+
+
+
+14. 下载和安装 mongodb-org-server/now 3.4.24
+
+      wget https://repo.mongodb.org/apt/ubuntu/dists/trusty/mongodb-org/3.4/multiverse/binary-amd64/mongodb-org_3.4.24_amd64.deb
+   wget https://repo.mongodb.org/apt/ubuntu/dists/trusty/mongodb-org/3.4/multiverse/binary-amd64/mongodb-org-tools_3.4.24_amd64.deb
+   wget https://repo.mongodb.org/apt/ubuntu/dists/trusty/mongodb-org/3.4/multiverse/binary-amd64/mongodb-org-shell_3.4.24_amd64.deb
+   wget https://repo.mongodb.org/apt/ubuntu/dists/trusty/mongodb-org/3.4/multiverse/binary-amd64/mongodb-org-server_3.4.24_amd64.deb
+   wget https://repo.mongodb.org/apt/ubuntu/dists/trusty/mongodb-org/3.4/multiverse/binary-amd64/mongodb-org-mongos_3.4.24_amd64.deb
+   dpkg -i mongodb-org_3.4.24_amd64.deb  mongodb-org-mongos_3.4.24_amd64.deb mongodb-org-server_3.4.24_amd64.deb  mongodb-org-shell_3.4.24_amd64.deb mongodb-org-tools_3.4.24_amd64.deb
+
+15. 上面的指令安装之后，会把mongodb 自动启动搞烂了，就是搞不见了。没关系，只要重复上述第十的步骤，就可以修复了
+
+   vi /lib/systemd/system/mongod.service 将下列内容贴入
+[Unit]
+Description=MongoDB Database Server
+Documentation=https://docs.mongodb.org/manual
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mongodb
+Group=mongodb
+EnvironmentFile=-/etc/default/mongod
+ExecStart=/usr/bin/mongod --config /etc/mongod.conf
+RuntimeDirectory=mongodb
+# file size
+LimitFSIZE=infinity
+# cpu time
+LimitCPU=infinity
+# virtual memory size
+LimitAS=infinity
+# open files
+LimitNOFILE=64000
+# processes/threads
+LimitNPROC=64000
+# locked memory
+LimitMEMLOCK=infinity
+# total threads (user+kernel)
+TasksMax=infinity
+TasksAccounting=false
+
+# Recommended limits for mongod as specified in
+# https://docs.mongodb.com/manual/reference/ulimit/#recommended-ulimit-settings
+
+[Install]
+WantedBy=multi-user.target
+
+
+存档后，systemctl enable mongod.service; systemctl start  mongod.service; systemctl status mongod.service
+
+如果mongodb安装好，而且运行了，你会看到底下的结果。
+
+ systemctl status mongod.service
+● mongod.service - MongoDB Database Server
+     Loaded: loaded (/lib/systemd/system/mongod.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2023-03-20 03:33:33 UTC; 2h 58min ago
+       Docs: https://docs.mongodb.org/manual
+   Main PID: 14868 (mongod)
+     Memory: 377.9M
+        CPU: 18.716s
+     CGroup: /system.slice/mongod.service
+             └─14868 /usr/bin/mongod --config /etc/mongod.conf
+
+Mar 20 03:33:33 bs-admin systemd[1]: Started MongoDB Database Server.
+
+
+
+16. 最后请自行登录网站，还有重启机器，重启机器之后，redis-server, mongod, 以及bs-admin 都会自己启动。至此, Binstream-admin 在 Ubuntu 22.04.2 LTS 中的架设方法, 全部完成了。 下只是关于node, redis-server, mongod, 以及 Ubuntu  版本的显示 以及一些运行状态的显示。
+
+
+
+
+root@bs-admin:~# systemctl status redis-server.service
+● redis-server.service - Advanced key-value store
+     Loaded: loaded (/lib/systemd/system/redis-server.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2023-03-20 03:21:44 UTC; 3h 38min ago
+       Docs: http://redis.io/documentation,
+             man:redis-server(1)
+   Main PID: 12634 (redis-server)
+     Status: "Ready to accept connections"
+      Tasks: 5 (limit: 4530)
+     Memory: 2.7M
+        CPU: 6.217s
+     CGroup: /system.slice/redis-server.service
+             └─12634 "/usr/bin/redis-server 127.0.0.1:6379" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" ""
+
+Mar 20 03:21:44 bs-admin systemd[1]: Starting Advanced key-value store...
+Mar 20 03:21:44 bs-admin systemd[1]: Started Advanced key-value store.
+root@bs-admin:~#
+root@bs-admin:~#
+root@bs-admin:~# systemctl status mongod.service
+● mongod.service - MongoDB Database Server
+     Loaded: loaded (/lib/systemd/system/mongod.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2023-03-20 03:33:33 UTC; 3h 27min ago
+       Docs: https://docs.mongodb.org/manual
+   Main PID: 14868 (mongod)
+     Memory: 377.9M
+        CPU: 22.911s
+     CGroup: /system.slice/mongod.service
+             └─14868 /usr/bin/mongod --config /etc/mongod.conf
+
+Mar 20 03:33:33 bs-admin systemd[1]: Started MongoDB Database Server.
+root@bs-admin:~#
+root@bs-admin:~#
+root@bs-admin:~# systemctl status bs-admin.service
+● bs-admin.service - bs-admin service
+     Loaded: loaded (/lib/systemd/system/bs-admin.service; disabled; vendor preset: enabled)
+     Active: active (running) since Mon 2023-03-20 05:59:35 UTC; 1h 1min ago
+   Main PID: 23112 (node)
+      Tasks: 33 (limit: 4530)
+     Memory: 135.7M
+        CPU: 20.020s
+     CGroup: /system.slice/bs-admin.service
+             ├─23112 /usr/bin/node /data/BinStream/admin/bin/admin.js
+             ├─23128 /data/node-v19.8.1-linux-x64/bin/node /data/BinStream/admin/bin/admin.js
+             └─23129 /data/node-v19.8.1-linux-x64/bin/node /data/BinStream/admin/bin/admin.js
+
+Mar 20 05:59:35 bs-admin systemd[1]: Started bs-admin service.
+
+
+
+
+ tail -f /data/BinStream/admin/logs/bs-admin.log
+[2023-03-20 06:59:35.628] [INFO] console - ##################### [master] pdata> ExpiredSnapsFile Number: 0
+[2023-03-20 06:59:35.628] [INFO] console - ##################### [master] pdata> removeExpiredSnaps remove all expired snap files
+[2023-03-20 06:59:35.628] [INFO] console - ##################### [master] pdata> recordStats......
+[2023-03-20 06:59:35.633] [INFO] console - ##################### [master] pdata> recordStats, time: 2023-03-20T06:59:35.633Z 6
+[2023-03-20 06:59:35.718] [INFO] console - ##################### [master] pdata> recordServerStats......
+[2023-03-20 06:59:35.719] [INFO] console - ##################### [master] pdata> recordServerStats, time: 2023-03-20T06:59:35.719Z 3
+[2023-03-20 06:59:36.061] [INFO] console - ##################### [fork] pdata> refreshGroupList......
+[2023-03-20 06:59:36.063] [INFO] console - ##################### [fork] pdata> refreshGroupList......
+[2023-03-20 07:00:36.061] [INFO] console - ##################### [fork] pdata> refreshGroupList......
+[2023-03-20 07:00:36.065] [INFO] console - ##################### [fork] pdata> refreshGroupList......
+
+
+
+
+
+
+root@bs-admin:~# mongo --version
+MongoDB shell version v3.4.24
+git version: 865b4f6a96d0f5425e39a18337105f33e8db504d
+OpenSSL version: OpenSSL 1.0.2n  7 Dec 2017
+allocator: tcmalloc
+modules: none
+build environment:
+    distmod: ubuntu1404
+    distarch: x86_64
+    target_arch: x86_64
+
+
+root@bs-admin:~# node --version
+v19.8.1
+
+
+
+root@bs-admin:~# redis-server --version
+Redis server v=6.0.16 sha=00000000:0 malloc=jemalloc-5.2.1 bits=64 build=a3fdef44459b3ad6
+
+
+root@bs-admin:~# lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 22.04.2 LTS
+Release:        22.04
+Codename:       jammy
+
+
+
